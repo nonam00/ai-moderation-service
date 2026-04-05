@@ -44,9 +44,6 @@ class WhisperService:
 
         return model
 
-    def _model_dtype(self) -> torch.dtype:
-        return next(self.model.parameters()).dtype
-
     def detect_language(self, file_path: str) -> Optional[str]:
         try:
             audio = whisper.load_audio(file_path)
@@ -54,8 +51,9 @@ class WhisperService:
 
             mel = whisper.log_mel_spectrogram(
                 audio,
-                device=self.model_config.device
-            ).to(dtype=self._model_dtype())
+                n_mels=128 if self.model_config.model_size == "large" else 80,
+                device=self.model_config.device,
+            ).to(self.model_config.device)
 
             _, probs = self.model.detect_language(mel=mel)
             lang = max(probs, key=probs.get)
@@ -65,15 +63,16 @@ class WhisperService:
             logger.warning("Language detection failed: %s", e)
             return None
 
-    def _confidence(self, segments: list) -> float:
-        scores = [np.exp(s["avg_logprob"]) for s in segments if "avg_logprob" in s]
-        return float(np.mean(scores)) if scores else 0.0
-
     def run_transcribe(self, file_path: str) -> dict:
         lang = self.detect_language(file_path)
 
+        # Converting transcribe config object into dictionary to pass into then function
         options = asdict(self.transcribe_config)
-        options["temperature"] = self.transcribe_config.temperature
+
+        # For some reason when trying to pass transcribe config value
+        # the actual value type in function arguments turns out to be type of tuple[tuple[float, ...]]
+        # Because of this behavior dictionary value needs to be hardcoded
+        options["temperature"] = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
         options["language"] = lang
 
         result = self.model.transcribe(
@@ -90,3 +89,10 @@ class WhisperService:
             "segments": segments,
             "confidence": self._confidence(segments)
         }
+
+    @staticmethod
+    def _confidence(segments: list) -> float:
+        # Calculating response confidence by calculating arithmetic mean of all scores
+        # Exponential function used to convert logarithmic probability back to normal value between 0 and 1
+        scores = [np.exp(s["avg_logprob"]) for s in segments if "avg_logprob" in s]
+        return float(np.mean(scores)) if scores else 0.0

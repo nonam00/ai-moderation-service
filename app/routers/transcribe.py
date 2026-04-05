@@ -33,7 +33,7 @@ async def transcribe(
         if len(content) > config.api_config.max_file_size:
             raise HTTPException(
                 status_code=400,
-                detail=f"Файл слишком большой. Максимум {config.api_config.max_file_size // (1024*1024)} МБ",
+                detail=f"File size is too big. Maximum {config.api_config.max_file_size // (1024*1024)} MB",
             )
 
         ext = os.path.splitext(file.filename or "audio")[-1] or ".bin"
@@ -41,7 +41,7 @@ async def transcribe(
             tmp.write(content)
             path_for_transcribe = tmp.name
 
-        logger.info("Файл: %s (%.1f МБ)", file.filename, len(content) / 1024 / 1024)
+        logger.info("File: %s (%.1f MB)", file.filename, len(content) / 1024 / 1024)
 
         start = time.time()
 
@@ -52,7 +52,7 @@ async def transcribe(
         )
 
         elapsed = time.time() - start
-        logger.info("Готово за %.1f сек", elapsed)
+        logger.info("Done in %.1f s", elapsed)
 
         dur = result["segments"][-1]["end"] if result["segments"] else 0.0
         payload: dict = {
@@ -85,9 +85,9 @@ async def transcribe(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Ошибка транскрипции: %s", e, exc_info=True)
+        logger.error("Transcribe error: %s", e, exc_info=True)
         return Response(
-            content=json.dumps({"ok": False, "err": str(e)}, ensure_ascii=False, separators=(",", ":")),
+            content=json.dumps({"ok": False, "err": str(e)}, ensure_ascii=False),
             status_code=500,
             media_type="application/json; charset=utf-8",
         )
